@@ -1,0 +1,12 @@
+Analysis report
+========================================================
+
+The goal of this project is to predict the manner the users did the exercice of collecting health data.
+
+
+
+
+```r
+first <- 1
+```
+
