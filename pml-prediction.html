@@ -203,9 +203,170 @@ hr {
 <body>
 <h1>Analysis report</h1>
 
-<p>The goal of this project is to predict the manner the users did the exercice of collecting health data.</p>
+<h2>Introduction</h2>
 
-<pre><code class="r">first &lt;- 1
+<p>The goal of this project is to predict the manner the users did the exercice of collecting health data. The manner is shown with letters A, B, C, D, E called classe in the data sets</p>
+
+<h2>Building the train data &amp; test data</h2>
+
+<p>first read the data files seeting as NA empty cells (&ldquo;&rdquo;,&ldquo; &rdquo;) or not correct cells(&ldquo;NA&rdquo;, &ldquo;#DIV/0!&rdquo;)</p>
+
+<pre><code class="r">training_raw &lt;- read.csv(&#39;pml-training.csv&#39;, dec = &#39;.&#39;, na.strings=c(&quot;&quot;,&quot; &quot;,&quot;NA&quot;, &quot;#DIV/0!&quot;))
+testing_raw &lt;- read.csv(&#39;pml-testing.csv&#39;, dec = &#39;.&#39;, na.strings=c(&quot;&quot;,&quot; &quot;,&quot;NA&quot;))
+set.seed(51342)
+</code></pre>
+
+<p>Please, open the raw Rmd if you want to see the functions created.</p>
+
+<p>I chose to remove columns with 97% at least of NA values. I tried more and less and 97% seems to be quite correct. 98% remove too few columns, and there is no new columns removed with a percentage under 97% before removing too much columns. I tried to remove columns with too few variance but it was not helpfull, so I kept these columns in the data sets. I removed the X (c(1))data which is just an id and not relevant for analysis. I set the same levels in column new_window of the test data because in test data, there is only &ldquo;no&rdquo; value and there is a technical issue with random forest method. Levels have to be the same. That sounds logical but I firstly didn&#39;t expect it.</p>
+
+<pre><code class="r"># remove all columns with 97% NA because shouldn&#39;t impact the model
+filtered_columns &lt;- !filterColumns(training_raw, isNa, 0.97)
+training_without_NA &lt;- subset(training_raw, select = filtered_columns)
+training_without_NA &lt;- subset(training_without_NA, select = -c(1))
+training_without_NA &lt;- mutate(training_without_NA, cvtd_timestamp = as.numeric(as.POSIXlt(as.character(cvtd_timestamp)), format = &quot;%d/%m/%Y %H:%M&quot;))
+
+testing_without_NA &lt;- subset(testing_raw, select = filtered_columns)
+testing_without_NA &lt;- subset(testing_without_NA, select = -c(1))
+testing_without_NA &lt;- mutate(testing_without_NA, cvtd_timestamp = as.numeric(as.POSIXlt(as.character(cvtd_timestamp)), format = &quot;%d/%m/%Y %H:%M&quot;))
+levels(testing_without_NA$new_window) &lt;- levels(training_without_NA$new_window)
+## predict with removed problem_id
+#to_test is the final data to predict classes. Not for sample error analysis because classe is not known
+to_test &lt;- subset(testing_without_NA, select = -c(59))
+to_test &lt;- mutate(to_test, 
+                  magnet_dumbbell_z = as.numeric(magnet_dumbbell_z),
+                  magnet_forearm_y = as.numeric(magnet_forearm_y),
+                  magnet_forearm_z = as.numeric(magnet_forearm_z))
+</code></pre>
+
+<p>To build and test the model, we will build training and testing data from the orginal training data.
+The cross validation chosen here is just a random sampling and let see if the out of sample error is enough or not. 
+The strategy here is to build the train data with randomyzed 60% of each classe (A, B, C, D, E) and build the test data with the remaining 40%.</p>
+
+<pre><code class="r">## takes a percentage randomly to build train data and 1-p to build test data
+## values are taken randomly and without replacement
+createTrainAndTestPartition &lt;- function(df, p){
+        len &lt;- dim(df)[1]
+        training_rows &lt;- sample(1:len, size = floor(p*len), replace = FALSE)        
+        list(train = df[training_rows,], test = df[-training_rows,])
+}
+
+## building data to build the model
+# data grouped by classe
+data_A &lt;- training_without_NA[training_without_NA$classe == &quot;A&quot;,]
+data_B &lt;- training_without_NA[training_without_NA$classe == &quot;B&quot;,]
+data_C &lt;- training_without_NA[training_without_NA$classe == &quot;C&quot;,]
+data_D &lt;- training_without_NA[training_without_NA$classe == &quot;D&quot;,]
+data_E &lt;- training_without_NA[training_without_NA$classe == &quot;E&quot;,]
+
+## createTrainAndTestPartition takes randomly 60% in each group to build train data, remaining 40% are test data
+data &lt;- createTrainAndTestPartition(data_A, 0.6) 
+training_A_1 &lt;- data$train
+testing_A_1 &lt;- data$test
+
+data &lt;- createTrainAndTestPartition(data_B, 0.6) 
+training_B_1 &lt;- data$train
+testing_B_1 &lt;- data$test
+
+data &lt;- createTrainAndTestPartition(data_C, 0.6) 
+training_C_1 &lt;- data$train
+testing_C_1 &lt;- data$test
+
+data &lt;- createTrainAndTestPartition(data_D, 0.6) 
+training_D_1 &lt;- data$train
+testing_D_1 &lt;- data$test
+
+data &lt;- createTrainAndTestPartition(data_E, 0.6) 
+training_E_1 &lt;- data$train
+testing_E_1 &lt;- data$test
+
+## build a training data
+training &lt;- rbind(training_A_1, training_B_1, training_C_1, training_D_1, training_E_1)
+## changed the order to better visualize effect
+testing &lt;- rbind(testing_E_1, testing_D_1, testing_B_1, testing_C_1, testing_A_1)
+</code></pre>
+
+<h2>Building the model</h2>
+
+<p>I chose to use the randomForest function from the randomForest package. The caret function with &ldquo;rf&rdquo; method was too long. As I removed lot of columns wich were declared irrelevant, I let all the variables as predictors</p>
+
+<pre><code class="r"># build the model with all remaining variables
+model_rf &lt;- randomForest(formula = classe ~ ., data = training)
+</code></pre>
+
+<h2>Predict the test data</h2>
+
+<p>The test data is here the test data built from the file called training. It&#39;s not the one with hidden classes. The goal here is to compare prediction from the built model with the known classes of the testing data set.</p>
+
+<pre><code class="r">## predict without classe (not needed even if no impact) variable
+prediction &lt;- predict(model_rf, subset(testing, select = -c(59)))
+</code></pre>
+
+<h2>Out of sample error</h2>
+
+<p>Let see the out of sample error and accuracy of the model</p>
+
+<pre><code class="r">df_test &lt;- data.frame(id = 1:length(prediction), classe=testing$classe, mode = &quot;EXPECTED&quot;)
+df_predicted &lt;- data.frame(id = 1:length(prediction), classe=prediction, mode = &quot;PREDICTED&quot;)
+df &lt;- rbind(df_predicted, df_test)
+g &lt;- qplot(id, classe, data=df, colour=mode)
+#g &lt;- g + geom_vline(xintercept = which(prediction != testing$classe))
+g
+</code></pre>
+
+<p><img src="data:image/png;base64,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" alt="plot of chunk unnamed-chunk-7"/> </p>
+
+<pre><code class="r">n &lt;- t(data.frame(ids = which(prediction != testing$classe)))
+p &lt;- t(data.frame(predicted = as.character(prediction[which(prediction != testing$classe)])))
+e &lt;- t(data.frame(expected = as.character(testing$classe[which(prediction != testing$classe)])))
+d &lt;- rbind(n, p, e)
+
+d
+</code></pre>
+
+<pre><code>##           [,1]  [,2]  [,3]  [,4]   [,5]   [,6]   [,7]   [,8]   [,9]  
+## ids       &quot;301&quot; &quot;302&quot; &quot;303&quot; &quot;1509&quot; &quot;1985&quot; &quot;1986&quot; &quot;2099&quot; &quot;2482&quot; &quot;3943&quot;
+## predicted &quot;D&quot;   &quot;D&quot;   &quot;D&quot;   &quot;C&quot;    &quot;C&quot;    &quot;C&quot;    &quot;C&quot;    &quot;C&quot;    &quot;A&quot;   
+## expected  &quot;E&quot;   &quot;E&quot;   &quot;E&quot;   &quot;D&quot;    &quot;D&quot;    &quot;D&quot;    &quot;D&quot;    &quot;D&quot;    &quot;B&quot;   
+##           [,10]  [,11]  [,12]  [,13]  [,14] 
+## ids       &quot;3944&quot; &quot;4567&quot; &quot;4972&quot; &quot;5273&quot; &quot;5274&quot;
+## predicted &quot;A&quot;    &quot;B&quot;    &quot;B&quot;    &quot;B&quot;    &quot;B&quot;   
+## expected  &quot;B&quot;    &quot;C&quot;    &quot;C&quot;    &quot;C&quot;    &quot;C&quot;
+</code></pre>
+
+<pre><code class="r">table(prediction, testing$classe)
+</code></pre>
+
+<pre><code>##           
+## prediction    A    B    C    D    E
+##          A 2232    2    0    0    0
+##          B    0 1517    4    0    0
+##          C    0    0 1365    5    0
+##          D    0    0    0 1282    3
+##          E    0    0    0    0 1440
+</code></pre>
+
+<p>Values are given in percentage:</p>
+
+<pre><code class="r">(1-sum(prediction == testing$classe)/length(prediction)) * 100
+</code></pre>
+
+<pre><code>## [1] 0.1783439
+</code></pre>
+
+<pre><code class="r">sum(prediction == testing$classe)/length(prediction) * 100
+</code></pre>
+
+<pre><code>## [1] 99.82166
+</code></pre>
+
+<p>The chosen model with random sample is quite good. The out of sample error is acceptable.</p>
+
+<h2>Apply the model to the final test data</h2>
+
+<pre><code class="r">final_prediction &lt;- predict(model_rf, newdata = to_test)
+
+pml_write_files(final_prediction)
 </code></pre>
 
 </body>
