@@ -292,7 +292,27 @@ testing &lt;- rbind(testing_E_1, testing_D_1, testing_B_1, testing_C_1, testing_
 
 <pre><code class="r"># build the model with all remaining variables
 model_rf &lt;- randomForest(formula = classe ~ ., data = training)
+model_rf
 </code></pre>
+
+<pre><code>## 
+## Call:
+##  randomForest(formula = classe ~ ., data = training) 
+##                Type of random forest: classification
+##                      Number of trees: 500
+## No. of variables tried at each split: 7
+## 
+##         OOB estimate of  error rate: 0.21%
+## Confusion matrix:
+##      A    B    C    D    E  class.error
+## A 3347    1    0    0    0 0.0002986858
+## B    1 2276    1    0    0 0.0008779631
+## C    0    5 2047    1    0 0.0029225524
+## D    0    0   10 1917    2 0.0062208398
+## E    0    0    0    4 2160 0.0018484288
+</code></pre>
+
+<p>The expected Error rate is about 0.21%</p>
 
 <h2>Predict the test data</h2>
 
