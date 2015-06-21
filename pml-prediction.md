@@ -98,8 +98,27 @@ I chose to use the randomForest function from the randomForest package. The care
 ```r
 # build the model with all remaining variables
 model_rf <- randomForest(formula = classe ~ ., data = training)
+model_rf
 ```
 
+```
+## 
+## Call:
+##  randomForest(formula = classe ~ ., data = training) 
+##                Type of random forest: classification
+##                      Number of trees: 500
+## No. of variables tried at each split: 7
+## 
+##         OOB estimate of  error rate: 0.21%
+## Confusion matrix:
+##      A    B    C    D    E  class.error
+## A 3347    1    0    0    0 0.0002986858
+## B    1 2276    1    0    0 0.0008779631
+## C    0    5 2047    1    0 0.0029225524
+## D    0    0   10 1917    2 0.0062208398
+## E    0    0    0    4 2160 0.0018484288
+```
+The expected Error rate is about 0.21%
 
 ## Predict the test data
 

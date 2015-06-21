@@ -158,12 +158,12 @@ testing <- rbind(testing_E_1, testing_D_1, testing_B_1, testing_C_1, testing_A_1
 
 I chose to use the randomForest function from the randomForest package. The caret function with "rf" method was too long. As I removed lot of columns wich were declared irrelevant, I let all the variables as predictors
 
-```{r cache=TRUE, results='hide'}
+```{r cache=TRUE}
 # build the model with all remaining variables
 model_rf <- randomForest(formula = classe ~ ., data = training)
-
+model_rf
 ```
-
+The expected Error rate is about 0.21%
 
 ## Predict the test data
 
